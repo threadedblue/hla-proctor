@@ -1,8 +1,6 @@
 package gov.nist.hla.ii;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,11 +13,10 @@ import org.ieee.standards.ieee1516._2010.InteractionClassType;
 import org.ieee.standards.ieee1516._2010.ObjectClassType;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.portico.impl.hla13.types.DoubleTime;
 
-import gov.nist.hla.ii.exception.PropertyNotAssigned;
-import gov.nist.hla.ii.exception.PropertyNotFound;
 import gov.nist.hla.ii.exception.RTIAmbassadorException;
+import littleints.Int1;
+import littleints.LittleintsFactory;
 
 // Tests herein require a fom file populated to a specific state.  The file in question is fom/som.xml.
 public class InjectionFederateTest {
@@ -105,13 +102,11 @@ public class InjectionFederateTest {
 	}
 	
 	@Test
-	public void testIsEmptyStep() {
-//		DoubleTime fedTime = new DoubleTime(3D);
-//		sut.setCurrTime(2D);
-//		assertTrue(sut.isEmptyStep(fedTime));
-//		sut.setCurrTime(3D);
-//		assertFalse(sut.isEmptyStep(fedTime));
-//		sut.setCurrTime(4D);
-//		assertFalse(sut.isEmptyStep(fedTime));
+	public void testEMF() {
+		Int1 int1 = LittleintsFactory.eINSTANCE.createInt1();
+		int1.setBoolVal(true);
+		int1.setIntVal(123);
+		int1.setStrVal("ABC");
+		sut.injectInteraction(int1, 1D);
 	}
 }

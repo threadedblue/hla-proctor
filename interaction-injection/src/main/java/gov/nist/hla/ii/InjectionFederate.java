@@ -18,8 +18,9 @@ import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.cpswt.config.ConfigParser;
-import org.cpswt.hla.SynchronizationPoints;
+import org.eclipse.emf.ecore.EAttribute;
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.ieee.standards.ieee1516._2010.AttributeType1;
 import org.ieee.standards.ieee1516._2010.DocumentRoot;
@@ -36,8 +37,6 @@ import org.portico.impl.hla13.types.DoubleTimeInterval;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import gov.nist.hla.ii.config.InteractionInjectionConfig;
-import gov.nist.hla.ii.exception.PropertyNotAssigned;
-import gov.nist.hla.ii.exception.PropertyNotFound;
 import gov.nist.hla.ii.exception.RTIAmbassadorException;
 import gov.nist.sds4emf.Deserialize;
 import hla.rti.AsynchronousDeliveryAlreadyEnabled;
@@ -85,10 +84,12 @@ public class InjectionFederate implements Runnable {
 
 	public static final String INTERACTION_NAME_ROOT = "InteractionRoot.C2WInteractionRoot";
 	public static final String OBJECT_NAME_ROOT = "ObjectRoot";
-
+	
 	public enum State {
 		CONSTRUCTED, INITIALIZED, JOINED, TERMINATING;
 	}
+	
+	public enum SYNCH_POINTS {readyToPopulate, readyToRun, readyToResign};
 
 	private State state = State.CONSTRUCTED;
 	private Double logicalTime;
@@ -229,7 +230,7 @@ public class InjectionFederate implements Runnable {
 
 		try {
 			timeStepHook.beforeReadytoPopulate();
-			synchronize(SynchronizationPoints.ReadyToPopulate);
+			synchronize(SYNCH_POINTS.readyToPopulate);
 			timeStepHook.afterReadytoPopulate();
 		} catch (RTIAmbassadorException e) {
 			log.error(e);
@@ -237,7 +238,7 @@ public class InjectionFederate implements Runnable {
 
 		try {
 			timeStepHook.beforeReadytoRun();
-			synchronize(SynchronizationPoints.ReadyToRun);
+			synchronize(SYNCH_POINTS.readyToRun);
 			timeStepHook.afterReadytoRun();
 		} catch (RTIAmbassadorException e) {
 			log.error(e);
@@ -261,7 +262,7 @@ public class InjectionFederate implements Runnable {
 			try {
 				switch (state) {
 				case TERMINATING:
-					synchronize(SynchronizationPoints.ReadyToResign);
+					synchronize(SYNCH_POINTS.readyToResign);
 					resignFederationExecution();
 					break;
 				case JOINED:
@@ -525,6 +526,17 @@ public class InjectionFederate implements Runnable {
 		}
 	}
 
+	public void injectInteraction(EObject eObject, Double logicalTime) {
+		Map<String, String> parameters = new HashMap<String, String>();
+		EClass eClass = eObject.eClass();
+		for (EAttribute eAttribute : eClass.getEAllAttributes()) {
+			Object value = eObject.eGet(eAttribute);
+			String s = eAttribute.getName();
+			parameters.put(eAttribute.getName(), value.toString());
+		}
+		injectInteraction(eClass.getName(), parameters, logicalTime);
+	}
+
 	public void injectInteraction(InterObjDef def, Double logicalTime) {
 		injectInteraction(def.getName(), def.getParameters(), logicalTime);
 	}
@@ -733,25 +745,25 @@ public class InjectionFederate implements Runnable {
 		return ("" + System.currentTimeMillis()).getBytes();
 	}
 
-	private void synchronize(String label) throws RTIAmbassadorException {
-		log.info("waiting for announcement of the synchronization point " + label);
-		while (!fedAmb.isSynchronizationPointPending(label)) {
+	private void synchronize(SYNCH_POINTS point) throws RTIAmbassadorException {
+		log.info("waiting for announcement of the synchronization point " + point);
+		while (!fedAmb.isSynchronizationPointPending(point.name())) {
 			tick();
 		}
 
 		try {
 			synchronized (rtiAmb) {
-				rtiAmb.synchronizationPointAchieved(label);
+				rtiAmb.synchronizationPointAchieved(point.name());
 			}
 		} catch (RTIexception e) {
 			throw new RTIAmbassadorException(e);
 		}
 
-		log.info("waiting for federation to synchronize on synchronization point " + label);
-		while (!fedAmb.isSynchronizationPointPending(label)) {
+		log.info("waiting for federation to synchronize on synchronization point " + point.name());
+		while (!fedAmb.isSynchronizationPointPending(point.name())) {
 			tick();
 		}
-		log.info("federation synchronized on " + label);
+		log.info("federation synchronized on " + point.name());
 	}
 
 	public Double advanceLogicalTime() throws RTIAmbassadorException {

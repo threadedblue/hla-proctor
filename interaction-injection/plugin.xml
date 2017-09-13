@@ -27,4 +27,12 @@
             class="gov.nist.hla.ii.InteractionSetPackage"/>
    </extension>
 
+   <extension point="org.eclipse.emf.ecore.generated_package">
+      <!-- @generated littleints -->
+      <package
+            uri="http://standards.ieee.org/IEEE1516-2010"
+            class="littleints.LittleintsPackage"
+            genModel="model/littleints.genmodel"/>
+   </extension>
+
 </plugin>
