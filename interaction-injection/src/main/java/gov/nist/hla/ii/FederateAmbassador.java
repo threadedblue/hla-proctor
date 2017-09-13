@@ -10,23 +10,17 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.portico.impl.hla13.types.DoubleTime;
 
-import hla.rti.AttributeNotKnown;
-import hla.rti.CouldNotDiscover;
-import hla.rti.EnableTimeConstrainedWasNotPending;
-import hla.rti.EnableTimeRegulationWasNotPending;
-import hla.rti.EventRetractionHandle;
-import hla.rti.FederateInternalError;
-import hla.rti.FederateOwnsAttributes;
-import hla.rti.InteractionClassNotKnown;
-import hla.rti.InteractionParameterNotKnown;
-import hla.rti.InvalidFederationTime;
-import hla.rti.LogicalTime;
-import hla.rti.ObjectClassNotKnown;
 import hla.rti.ObjectNotKnown;
-import hla.rti.ReceivedInteraction;
-import hla.rti.ReflectedAttributes;
-import hla.rti.TimeAdvanceWasNotInProgress;
-import hla.rti.jlc.NullFederateAmbassador;
+import hla.rti1516e.AttributeHandleValueMap;
+import hla.rti1516e.InteractionClassHandle;
+import hla.rti1516e.LogicalTime;
+import hla.rti1516e.NullFederateAmbassador;
+import hla.rti1516e.ObjectClassHandle;
+import hla.rti1516e.ObjectInstanceHandle;
+import hla.rti1516e.OrderType;
+import hla.rti1516e.ParameterHandleValueMap;
+import hla.rti1516e.TransportationTypeHandle;
+import hla.rti1516e.exceptions.FederateInternalError;
 
 // assume single threaded environment
 public class FederateAmbassador extends NullFederateAmbassador {
@@ -36,17 +30,17 @@ public class FederateAmbassador extends NullFederateAmbassador {
 	private final double federateLookahead = 1.0;
 
 	private class ObjectDetails {
-		private int objectHandle;
-		private int objectClass;
+		private ObjectInstanceHandle objectHandle;
+		private ObjectClassHandle objectClass;
 		private String objectName;
 
-		public ObjectDetails(int objectHandle, int objectClass, String objectName) {
+		public ObjectDetails(ObjectInstanceHandle objectHandle, ObjectClassHandle objectClass, String objectName) {
 			this.objectHandle = objectHandle;
 			this.objectClass = objectClass;
 			this.objectName = objectName;
 		}
 
-		public int getObjectClass() {
+		public ObjectClassHandle getObjectClass() {
 			return objectClass;
 		}
 
@@ -60,10 +54,9 @@ public class FederateAmbassador extends NullFederateAmbassador {
 
 	private Set<String> _achievedSynchronizationPoints = new HashSet<String>();
 
-	
 	// map the handle for a discovered object instance to its associated
 	// ObjectDetails
-	private Map<Integer, ObjectDetails> objectInstances = new HashMap<Integer, ObjectDetails>();
+	private Map<ObjectInstanceHandle, ObjectDetails> objectInstances = new HashMap<ObjectInstanceHandle, ObjectDetails>();
 
 	// names of previously discovered object instances that have since been
 	// removed
@@ -79,8 +72,7 @@ public class FederateAmbassador extends NullFederateAmbassador {
 	private double logicalTime = 0D;
 
 	@Override
-	public void announceSynchronizationPoint(String synchronizationPointLabel, byte[] userSuppliedTag)
-			throws FederateInternalError {
+	public void announceSynchronizationPoint(String synchronizationPointLabel, byte[] userSuppliedTag) {
 		if (pendingSynchronizationPoints.contains(synchronizationPointLabel)) {
 			log.warn("duplicate announcement of synchronization point: " + synchronizationPointLabel);
 		} else {
@@ -89,109 +81,103 @@ public class FederateAmbassador extends NullFederateAmbassador {
 		}
 	}
 
-	@Override
-	public void federationSynchronized(String synchronizationPointLabel) throws FederateInternalError {
-		pendingSynchronizationPoints.remove(synchronizationPointLabel);
-        _achievedSynchronizationPoints.add(synchronizationPointLabel);
-		log.info("synchronization point achieved: " + synchronizationPointLabel);
-	}
+	// @Override
+	// public void federationSynchronized(String synchronizationPointLabel) {
+	// pendingSynchronizationPoints.remove(synchronizationPointLabel);
+	// _achievedSynchronizationPoints.add(synchronizationPointLabel);
+	// log.info("synchronization point achieved: " + synchronizationPointLabel);
+	// }
 
 	@Override
-	public void timeRegulationEnabled(LogicalTime theFederateTime)
-			throws InvalidFederationTime, EnableTimeRegulationWasNotPending, FederateInternalError {
+	public void timeRegulationEnabled(LogicalTime theFederateTime) {
 		isTimeRegulating = true;
 		logicalTime = convertTime(theFederateTime);
 		log.debug("time regulation enabled: t=" + logicalTime);
 	}
 
 	@Override
-	public void timeConstrainedEnabled(LogicalTime theFederateTime)
-			throws InvalidFederationTime, EnableTimeConstrainedWasNotPending, FederateInternalError {
+	public void timeConstrainedEnabled(LogicalTime theFederateTime) {
 		isTimeConstrained = true;
 		logicalTime = convertTime(theFederateTime);
 		log.debug("time constrained enabled: t=" + logicalTime);
 	}
 
 	@Override
-	public void timeAdvanceGrant(LogicalTime theTime)
-			throws InvalidFederationTime, TimeAdvanceWasNotInProgress, FederateInternalError {
+	public void timeAdvanceGrant(LogicalTime theTime) {
 		isTimeAdvancing = false;
 		logicalTime = convertTime(theTime);
 		log.debug("time advance granted: t=" + logicalTime);
 	}
 
 	@Override
-	public void receiveInteraction(int interactionClass, ReceivedInteraction theInteraction, byte[] userSuppliedTag)
-			throws InteractionClassNotKnown, InteractionParameterNotKnown, FederateInternalError {
+	public void receiveInteraction(InteractionClassHandle interactionClass, ParameterHandleValueMap theInteraction,
+			byte[] userSuppliedTag, OrderType sentOrdering, TransportationTypeHandle theTransport,
+			SupplementalReceiveInfo receiveInfo) throws FederateInternalError {
 		try {
-			receiveInteraction(interactionClass, theInteraction, userSuppliedTag, null, null);
-		} catch (InvalidFederationTime e) {
+			receiveInteraction(interactionClass, theInteraction, userSuppliedTag, sentOrdering, theTransport, null,
+					sentOrdering, receiveInfo);
+		} catch (FederateInternalError e) {
 			throw new FederateInternalError(e);
 		}
 	}
 
 	@Override
-	public void receiveInteraction(int interactionClass, ReceivedInteraction theInteraction, byte[] userSuppliedTag,
-			LogicalTime theTime, EventRetractionHandle eventRetractionHandle) throws InteractionClassNotKnown,
-			InteractionParameterNotKnown, InvalidFederationTime, FederateInternalError {
+	public void receiveInteraction(InteractionClassHandle interactionClass, ParameterHandleValueMap theInteraction,
+			byte[] userSuppliedTag, OrderType sentOrdering, TransportationTypeHandle theTransport, LogicalTime theTime,
+			OrderType receivedOrdering, SupplementalReceiveInfo receiveInfo) throws FederateInternalError {
 		log.info("received interaction: handle=" + interactionClass);
 		receivedInteractions.add(new Interaction(interactionClass, theInteraction));
 	}
 
 	@Override
-	public void discoverObjectInstance(int theObject, int theObjectClass, String objectName)
-			throws CouldNotDiscover, ObjectClassNotKnown, FederateInternalError {
+	public void discoverObjectInstance(ObjectInstanceHandle theObject, ObjectClassHandle theObjectClass,
+			String objectName) throws FederateInternalError {
 		log.info("discovered new object instance: (handle, class, name)=" + "(" + theObject + ", " + theObjectClass
 				+ ", " + objectName + ")");
 		if (objectInstances.get(theObject) == null) {
 			objectInstances.put(theObject, new ObjectDetails(theObject, theObjectClass, objectName));
 		} else {
-			log.debug(String.format("Already discovered: theObject=%d theObjectClass=%d objectName=%s its ok carry on", theObject,
-					theObjectClass, objectName));
+			log.debug(String.format("Already discovered: theObject=%d theObjectClass=%d objectName=%s its ok carry on",
+					theObject, theObjectClass, objectName));
 		}
 	}
 
 	@Override
-	public void reflectAttributeValues(int theObject, ReflectedAttributes theAttributes, byte[] userSuppliedTag)
-			throws ObjectNotKnown, AttributeNotKnown, FederateOwnsAttributes, FederateInternalError {
-		try {
-			reflectAttributeValues(theObject, theAttributes, userSuppliedTag, null, null);
-		} catch (InvalidFederationTime e) {
-			throw new FederateInternalError(e);
-		}
+	public void reflectAttributeValues(ObjectInstanceHandle theObject, AttributeHandleValueMap theAttributes,
+			byte[] userSuppliedTag, OrderType sentOrder, TransportationTypeHandle transport,
+			SupplementalReflectInfo reflectInfo) throws FederateInternalError {
+		reflectAttributeValues(theObject, theAttributes, userSuppliedTag, sentOrder, transport, null, sentOrder,
+				reflectInfo);
 	}
 
 	@Override
-	public void reflectAttributeValues(int theObject, ReflectedAttributes theAttributes, byte[] userSuppliedTag,
-			LogicalTime theTime, EventRetractionHandle retractionHandle) throws ObjectNotKnown, AttributeNotKnown,
-			FederateOwnsAttributes, InvalidFederationTime, FederateInternalError {
+	public void reflectAttributeValues(ObjectInstanceHandle theObject, AttributeHandleValueMap theAttributes,
+			byte[] userSuppliedTag, OrderType sentOrdering, TransportationTypeHandle theTransport, LogicalTime theTime,
+			OrderType receivedOrdering, SupplementalReflectInfo reflectInfo) throws FederateInternalError {
 		ObjectDetails details = objectInstances.get(theObject);
 		if (details == null) {
-			throw new ObjectNotKnown("no discovered object instance with handle " + theObject);
+			try {
+				throw new ObjectNotKnown("no discovered object instance with handle " + theObject);
+			} catch (ObjectNotKnown e) {
+				log.error(e);
+			}
 		}
-		int theObjectClass = details.getObjectClass();
+		ObjectClassHandle theObjectClass = details.getObjectClass();
 		String objectName = details.getObjectName();
 		receivedObjectReflections.add(new ObjectReflection(theObjectClass, objectName, theAttributes));
 		log.info("received object reflection for the object instance " + objectName);
 	}
 
 	@Override
-	public void removeObjectInstance(int theObject, byte[] userSuppliedTag)
-			throws ObjectNotKnown, FederateInternalError {
-		try {
-			removeObjectInstance(theObject, userSuppliedTag, null, null);
-		} catch (InvalidFederationTime e) {
-			throw new FederateInternalError(e);
-		}
-	}
-
-	@Override
-	public void removeObjectInstance(int theObject, byte[] userSuppliedTag, LogicalTime theTime,
-			EventRetractionHandle retractionHandle)
-			throws ObjectNotKnown, InvalidFederationTime, FederateInternalError {
+	public void removeObjectInstance(ObjectInstanceHandle theObject, byte[] userSuppliedTag, OrderType sentOrdering,
+			SupplementalRemoveInfo removeInfo) throws FederateInternalError {
 		ObjectDetails details = objectInstances.remove(theObject);
 		if (details == null) {
-			throw new ObjectNotKnown("no discovered object instance with handle " + theObject);
+			try {
+				throw new ObjectNotKnown("no discovered object instance with handle " + theObject);
+			} catch (ObjectNotKnown e) {
+				log.error(e);
+			}
 		}
 		String objectName = details.getObjectName();
 		removedObjectNames.add(objectName);
