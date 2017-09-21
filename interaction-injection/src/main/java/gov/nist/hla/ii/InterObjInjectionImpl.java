@@ -1,16 +1,16 @@
 package gov.nist.hla.ii;
 
-import hla.rti.FederateNotExecutionMember;
-import hla.rti.NameNotFound;
-import hla.rti.ObjectNotKnown;
-import hla.rti.RTIinternalError;
-
-import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.eclipse.emf.ecore.EObject;
+
+import hla.rti.FederateNotExecutionMember;
+import hla.rti.NameNotFound;
+import hla.rti.ObjectNotKnown;
+import hla.rti.RTIinternalError;
 
 public abstract class InterObjInjectionImpl implements InterObjInjection {
 
@@ -18,34 +18,31 @@ public abstract class InterObjInjectionImpl implements InterObjInjection {
 
 	private static final Logger log = LogManager
 			.getLogger(InterObjInjectionImpl.class);
-
-	protected Queue<InterObjDef> publications = new ConcurrentLinkedQueue<InterObjDef>();
+	Queue<EObject> publications = new ConcurrentLinkedQueue<EObject>();
 
 	public InterObjInjectionImpl() {
 		super();
 	}
-
-	@Override
-	public abstract Queue<InterObjDef> getPreSynchInteractions();
-
-	@Override
-	public abstract Queue<InterObjDef> getPublications(Double logicalTime);
 	
 	@Override
-	public void addInteraction(String interactionName, Map<String, String> parameters) {
-		InterObjDef def = new InterObjDef(interactionName, parameters, InterObjDef.TYPE.INTERACTION);
+	public Queue<EObject> getPreSynchInteractions(){return publications;}
+	
+	@Override
+	public Queue<EObject> getPublications(Double logicalTime){return publications;}
+	
+	@Override
+	public void addInteraction(EObject def) {
 		addInterObj(def);
 		log.trace("addInteraction=" + def);
 	}
 	
 	@Override
-	public void addObject(String objectName, Map<String, String> attributes) throws NameNotFound, FederateNotExecutionMember, RTIinternalError, ObjectNotKnown {
-		InterObjDef def = new InterObjDef(objectName, attributes, InterObjDef.TYPE.OBJECT);
+	public void addObject(EObject def) throws NameNotFound, FederateNotExecutionMember, RTIinternalError, ObjectNotKnown {
 		addInterObj(def);
 		log.trace("addObject=" + def);
 	}
 	
-	private void addInterObj(InterObjDef def) {
+	private void addInterObj(EObject def) {
 		publications.add(def);
 	}
 

@@ -5,23 +5,6 @@ import hla.rti1516e.AttributeHandleValueMap;
 import hla.rti1516e.ObjectClassHandle;
 
 public class ObjectReflection {
-//	private class Attribute {
-//		private int handle;
-//		private String value;
-//
-//		public Attribute(int handle, String value) {
-//			this.handle = handle;
-//			this.value = value;
-//		}
-//
-//		public int getHandle() {
-//			return handle;
-//		}
-//
-//		public String getValue() {
-//			return value;
-//		}
-//	}
 
 	private ObjectClassHandle objectClass;
 	private String objectName;

@@ -2,6 +2,7 @@ package gov.nist.sds4emf;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.eclipse.emf.ecore.EPackage.Registry;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
@@ -16,7 +17,7 @@ public abstract class AbstractSerializeDeserialize {
 
 	protected static void init() {
 		log.trace("AbstractSerializeDeserialize==>" + resourceSet);
-		resourceSet.getPackageRegistry().put(EcorePackage.eNS_URI, EcorePackage.eINSTANCE);
+		getPackageRegistry().put(EcorePackage.eNS_URI, EcorePackage.eINSTANCE);
 		log.trace("<==AbstractSerializeDeserialize");
 	}
 	
@@ -38,5 +39,9 @@ public abstract class AbstractSerializeDeserialize {
 	
 	public static void registerPackage(String packageURI, Object packageImpl) {
 		getResourceSet().getPackageRegistry().put(packageURI, packageImpl);
+	}
+	
+	public static Registry getPackageRegistry() {
+		return resourceSet.getPackageRegistry();
 	}
 }

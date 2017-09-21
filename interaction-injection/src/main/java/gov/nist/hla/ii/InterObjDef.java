@@ -2,6 +2,8 @@ package gov.nist.hla.ii;
 
 import java.util.Map;
 
+import hla.rti1516e.InteractionClassHandle;
+
 public class InterObjDef {
 
 	public enum TYPE {
@@ -10,20 +12,26 @@ public class InterObjDef {
 
 	public final TYPE type;
 
+	protected final InteractionClassHandle handle;
 	protected final String name;
-	protected final Map<String, String> parameters;
+	protected final Map<String, byte[]> parameters;
 
-	public InterObjDef(String name, Map<String, String> parameters, TYPE type) {
+	public InterObjDef(InteractionClassHandle handle, String name, Map<String, byte[]> parameters, TYPE type) {
+		this.handle = handle;
 		this.name = name;
 		this.parameters = parameters;
 		this.type = type;
+	}
+
+	public InteractionClassHandle getHandle() {
+		return handle;
 	}
 
 	public String getName() {
 		return name;
 	}
 
-	public Map<String, String> getParameters() {
+	public Map<String, byte[]> getParameters() {
 		return parameters;
 	}
 

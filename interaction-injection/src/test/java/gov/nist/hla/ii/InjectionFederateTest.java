@@ -107,6 +107,7 @@ public class InjectionFederateTest {
 		int1.setBoolVal(true);
 		int1.setIntVal(123);
 		int1.setStrVal("ABC");
+		String name = int1.eClass().getName();
 		sut.injectInteraction(int1, 1D);
 	}
 }

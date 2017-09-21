@@ -2,13 +2,12 @@ package gov.nist.hla.ii;
 
 import java.util.Map;
 
-import hla.rti.RTIambassador;
+import org.eclipse.emf.ecore.EObject;
 
 public interface InterObjReception {
 
-	void receiveInteraction(Double timeStep, String interactionName,
-			Map<String, String> parameters);
+	EObject receiveInteraction(Double timeStep, EObject interaction);
 	
-	void receiveObject(Double timeStep, String objectClassName, String objectName,
-			Map<String, String> attributes);
+	EObject receiveObject(Double timeStep, String objectClassName, String objectName,
+			Map<String, byte[]> attributes);
 }

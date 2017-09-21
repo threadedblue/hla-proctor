@@ -1,26 +1,27 @@
 package gov.nist.hla.ii;
 
+import java.util.Queue;
+
+import org.eclipse.emf.ecore.EObject;
+
 import hla.rti.FederateNotExecutionMember;
 import hla.rti.NameNotFound;
 import hla.rti.ObjectNotKnown;
 import hla.rti.RTIinternalError;
 
-import java.util.Map;
-import java.util.Queue;
-
 public interface InterObjInjection {
 	
-	public Queue<InterObjDef> getPreSynchInteractions();
+	public Queue<EObject> getPreSynchInteractions();
 
-	public Queue<InterObjDef> getPublications(Double logicalTime);
-
-	public void addObject(String objectName, Map<String, String> attributes) throws NameNotFound, FederateNotExecutionMember, RTIinternalError, ObjectNotKnown;
-
-	public void addInteraction(String interactionName, Map<String, String> parameters);
+	public Queue<EObject> getPublications(Double logicalTime);
 
 	public void afterReadytoPopulate();
 
 	public void afterReadytoRun();
 	
 	public void afterAdvanceLogicalTime();
+
+	void addInteraction(EObject def);
+
+	void addObject(EObject def) throws NameNotFound, FederateNotExecutionMember, RTIinternalError, ObjectNotKnown;
 }

@@ -61,10 +61,5 @@
 			</testResource>
 		</testResources>
 	</build>
-	<parent>
-		<groupId>gov.nist.hla</groupId>
-		<artifactId>pubsub-java</artifactId>
-		<version>0.0.1-SNAPSHOT</version>
-	</parent>
 	<groupId>gov.nist.hla</groupId>
 </project>

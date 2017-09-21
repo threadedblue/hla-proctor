@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -19,7 +20,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.ieee.standards.ieee1516._2010.AttributeType1;
 import org.ieee.standards.ieee1516._2010.DocumentRoot;
@@ -57,9 +61,9 @@ import hla.rti1516e.exceptions.ConnectionFailed;
 import hla.rti1516e.exceptions.CouldNotCreateLogicalTimeFactory;
 import hla.rti1516e.exceptions.CouldNotOpenFDD;
 import hla.rti1516e.exceptions.ErrorReadingFDD;
-import hla.rti1516e.exceptions.FederateNameAlreadyInUse;
 import hla.rti1516e.exceptions.FederateNotExecutionMember;
 import hla.rti1516e.exceptions.FederateServiceInvocationsAreBeingReportedViaMOM;
+import hla.rti1516e.exceptions.FederationExecutionAlreadyExists;
 import hla.rti1516e.exceptions.InconsistentFDD;
 import hla.rti1516e.exceptions.InteractionClassNotDefined;
 import hla.rti1516e.exceptions.InteractionClassNotPublished;
@@ -83,22 +87,20 @@ import hla.rti1516e.exceptions.UnsupportedCallbackModel;
 import hla.rti1516e.time.HLAfloat64Interval;
 import hla.rti1516e.time.HLAfloat64Time;
 import hla.rti1516e.time.HLAfloat64TimeFactory;
+import littleints.LittleintsPackage;
 
-// assume that SIMULATION_END is not sent as a Receive Order message
 public class InjectionFederate implements Runnable {
 	private static final Logger log = LogManager.getLogger(InjectionFederate.class);
-
-	private static final String SIMULATION_END = "InteractionRoot.C2WInteractionRoot.SimulationControl.SimEnd";
 
 	private static final int MAX_JOIN_ATTEMPTS = 6;
 	private static final int REJOIN_DELAY_MS = 10000;
 
-	public static final String INTERACTION_NAME_ROOT = "InteractionRoot.C2WInteractionRoot";
-	public static final String OBJECT_NAME_ROOT = "ObjectRoot";
+	public static final String INTERACTION_NAME_ROOT = "HLAinteractionRoot";
+	public static final String OBJECT_NAME_ROOT = "HLAobjectRoot";
 
 	public enum State {
 		CONSTRUCTED, INITIALIZED, JOINED, TERMINATING;
-	}
+	};
 
 	public enum SYNCH_POINTS {
 		readyToPopulate, readyToRun, readyToResign
@@ -171,7 +173,7 @@ public class InjectionFederate implements Runnable {
 		try {
 			rtiAmb = RtiFactoryFactory.getRtiFactory().getRtiAmbassador();
 			encoderFactory = RtiFactoryFactory.getRtiFactory().getEncoderFactory();
-			fedAmb = new FederateAmbassador();
+			fedAmb = new FederateAmbassador(rtiAmb);
 			rtiAmb.connect( fedAmb, CallbackModel.HLA_EVOKED );
 		} catch (RTIinternalError | ConnectionFailed | InvalidLocalSettingsDesignator | UnsupportedCallbackModel | AlreadyConnected | CallNotAllowedFromWithinCallback e) {
 			throw new RTIAmbassadorException(e);
@@ -192,24 +194,12 @@ public class InjectionFederate implements Runnable {
 			enableTimeConstrained();
 			enableTimeRegulation();
 			publishAndSubscribe();
-			// Notification must occur after publish and subscribe.
-//			notifyOfFederationJoin();
 
 		} catch (InterruptedException | RTIAmbassadorException e) {
 			log.error(e);
 		}
 		log.trace("<==init");
 	}
-
-//	public void notifyOfFederationJoin() {
-//		String interactionName = formatInteractionName("FederateJoinInteraction");
-//		Map<String, String> params = new HashMap<String, String>();
-//		String federateId = String.format("%s-%s", federateName, UUID.randomUUID());
-//		params.put("FederateId", federateId);
-//		params.put("FederateType", federateName);
-//		params.put("IsLateJoiner", "false");
-//		injectInteraction(interactionName, params, logicalTime);
-//	}
 
 	public void loadConfiguration(String filepath) throws IOException {
 		if (state != State.CONSTRUCTED && state != State.INITIALIZED) {
@@ -231,7 +221,7 @@ public class InjectionFederate implements Runnable {
 		log.debug("lookahead=" + lookahead);
 		stepsize = iiConfig.getStepsize();
 		log.debug("stepsize=" + stepsize);
-		URL[] urls = {new File(fomFilePath).toURI().toURL()};
+		URL[] urls = {new File(fomFilePath).getAbsoluteFile().toURI().toURL()};
 		foms = urls;
 		fom = loadFOM();
 		changeState(State.INITIALIZED);
@@ -249,6 +239,7 @@ public class InjectionFederate implements Runnable {
 
 		try {
 			timeStepHook.beforeReadytoPopulate();
+//			rtiAmb.registerFederationSynchronizationPoint( SYNCH_POINTS.readyToPopulate.name(), null );
 			synchronize(SYNCH_POINTS.readyToPopulate);
 			timeStepHook.afterReadytoPopulate();
 		} catch (RTIAmbassadorException | RTIexception e) {
@@ -257,6 +248,7 @@ public class InjectionFederate implements Runnable {
 
 		try {
 			timeStepHook.beforeReadytoRun();
+//			rtiAmb.registerFederationSynchronizationPoint( SYNCH_POINTS.readyToRun.name(), null );
 			synchronize(SYNCH_POINTS.readyToRun);
 			timeStepHook.afterReadytoRun();
 		} catch (RTIAmbassadorException | RTIexception e) {
@@ -268,7 +260,7 @@ public class InjectionFederate implements Runnable {
 			while (state != State.TERMINATING) {
 
 				handleMessages();
-//				processIntObjs(logicalTime);
+				processIntObjs(logicalTime);
 
 				timeStepHook.beforeAdvanceLogicalTime();
 				advanceLogicalTime();
@@ -297,24 +289,19 @@ public class InjectionFederate implements Runnable {
 		log.trace("<==run");
 	}
 
-//	private void processIntObjs(Double logicalTime) {
-//		Queue<InterObjDef> interactions = null;
-//		if (logicalTime == null) {
-//			interactions = interObjectInjection.getPreSynchInteractions();
-//		} else {
-//			interactions = interObjectInjection.getPublications(logicalTime);
-//		}
-//
-//		InterObjDef def = null;
-//		while ((def = interactions.poll()) != null) {
-//			log.trace("def=" + def);
-//			if (def.getType() == InterObjDef.TYPE.OBJECT) {
-//				updateObject(def);
-//			} else {
-//				injectInteraction(def, logicalTime);
-//			}
-//		}
-//	}
+	private void processIntObjs(Double logicalTime) {
+		Queue<EObject> interactions = null;
+		if (logicalTime == null) {
+			interactions = interObjectInjection.getPreSynchInteractions();
+		} else {
+			interactions = interObjectInjection.getPublications(logicalTime);
+		}
+
+		EObject def = null;
+		while ((def = interactions.poll()) != null) {
+			injectInteraction(def, logicalTime);
+		}
+	}
 
 	private void handleMessages() throws RTIAmbassadorException {
 
@@ -324,14 +311,20 @@ public class InjectionFederate implements Runnable {
 			while ((receivedInteraction = fedAmb.nextInteraction()) != null) {
 				// log.trace("receivedInteraction=" + receivedInteraction);
 				receivedNothing = false;
-				InteractionClassHandle interactionHandle = receivedInteraction.getInteractionClassHandle();
-				String interactionName = rtiAmb.getInteractionClassName(interactionHandle);
-				Map<String, String> parameters = mapParameters(receivedInteraction);
-				interObjectReception.receiveInteraction(logicalTime, interactionName, parameters);
+				EPackage ePackage = EPackage.Registry.INSTANCE.getEPackage(LittleintsPackage.eNS_URI);
+				EClassifier eClassifier = ePackage.getEClassifier(receivedInteraction.getName());
+				EClass eClass=(EClass)eClassifier;		
+				EObject eObject = EcoreUtil.create(eClass);
 
-				if (interactionName.equals(SIMULATION_END)) {
-					changeState(State.TERMINATING);
+				for (Map.Entry<ParameterHandle, byte[]> entry : receivedInteraction.getParameters().entrySet()) {
+					String interactionName = rtiAmb.getParameterName(receivedInteraction.getHandle(), entry.getKey());
+					EAttribute eAttribute = (EAttribute)eClass.getEStructuralFeature(interactionName);
+					EDataType eDataType = eAttribute.getEAttributeType();
+					Object obj = EcoreUtil.createFromString(eDataType, new String(entry.getValue()));
+					eObject.eSet(eAttribute, obj);
 				}
+				
+				interObjectReception.receiveInteraction(logicalTime, eObject);
 			}
 
 			ObjectReflection receivedObjectReflection;
@@ -359,21 +352,21 @@ public class InjectionFederate implements Runnable {
 				DoubleTime lt = (DoubleTime) rtiAmb.queryLogicalTime();
 				interObjectReception.receiveInteraction(logicalTime,
 						String.format("%s %s", lt.toString(), "Nothing received!!"),
-						new HashMap<String, String>());
+						new HashMap<String, byte[]>());
 			}
 		} catch (RTIexception e) {
 			throw new RTIAmbassadorException(e);
 		}
 	}
 
-	Map<String, String> mapParameters(Interaction receivedInteraction) {
+	Map<String, byte[]> mapParameters(Interaction receivedInteraction) {
 		InteractionClassHandle interactionHandle = receivedInteraction.getInteractionClassHandle();
-		Map<String, String> parameters = null;
+		Map<String, byte[]> parameters = null;
 		try {
-			parameters = new HashMap<String, String>();
+			parameters = new HashMap<String, byte[]>();
 			for (Map.Entry<ParameterHandle, byte[]> entry : receivedInteraction.getParameters().entrySet()) {
 				String parameterName = rtiAmb.getParameterName(interactionHandle, entry.getKey());
-				String parameterValue = receivedInteraction.getParameterValue(entry.getKey());
+				byte[] parameterValue = receivedInteraction.getParameterValue(entry.getKey());
 				log.debug(parameterName + "=" + parameterValue);
 				parameters.put(parameterName, parameterValue);
 			}
@@ -415,11 +408,12 @@ public class InjectionFederate implements Runnable {
 			log.info("joining federation " + federationName + " as " + federateName + " (" + i + ")");
 			try {
 				synchronized (rtiAmb) {
-					rtiAmb.joinFederationExecution(federateName, federateName, federationName, foms);
+					rtiAmb.createFederationExecution( federationName, foms );
+					rtiAmb.joinFederationExecution(federateName, federationName);
 				}
 				this.timeFactory = (HLAfloat64TimeFactory)rtiAmb.getTimeFactory();
 			} catch (SaveInProgress
-					| RestoreInProgress | RTIinternalError | CouldNotCreateLogicalTimeFactory | FederateNameAlreadyInUse | hla.rti1516e.exceptions.FederationExecutionDoesNotExist | InconsistentFDD | ErrorReadingFDD | CouldNotOpenFDD | hla.rti1516e.exceptions.FederateAlreadyExecutionMember | NotConnected | CallNotAllowedFromWithinCallback | hla.rti1516e.exceptions.FederateNotExecutionMember e) {
+					| RestoreInProgress | RTIinternalError | CouldNotCreateLogicalTimeFactory | hla.rti1516e.exceptions.FederationExecutionDoesNotExist | hla.rti1516e.exceptions.FederateAlreadyExecutionMember | NotConnected | CallNotAllowedFromWithinCallback | hla.rti1516e.exceptions.FederateNotExecutionMember | InconsistentFDD | ErrorReadingFDD | CouldNotOpenFDD | FederationExecutionAlreadyExists e) {
 				log.error("", e);
 			}
 			joinSuccessful = true;
@@ -545,11 +539,12 @@ public class InjectionFederate implements Runnable {
 			e1.printStackTrace();
 		}
 		for (EAttribute eAttribute : eClass.getEAllAttributes()) {
+			EDataType eDataType = eAttribute.getEAttributeType();
 			Object value = eObject.eGet(eAttribute);
 			String parameterName = eAttribute.getName();
 			try {
 				ParameterHandle parameterHandle = rtiAmb.getParameterHandle(interactionHandle, parameterName);
-				parameters.put(parameterHandle, value.toString().getBytes());
+				parameters.put(parameterHandle, EcoreUtil.convertToString(eDataType, value).getBytes());
 			} catch (hla.rti1516e.exceptions.NameNotFound | InvalidInteractionClassHandle
 					| hla.rti1516e.exceptions.FederateNotExecutionMember | NotConnected | RTIinternalError e) {
 				// TODO Auto-generated catch block
@@ -670,11 +665,11 @@ public class InjectionFederate implements Runnable {
 		return classHandle;
 	}
 
-	public ObjectClassHandle publishObject(InterObjDef def) {
+	public ObjectClassHandle publishObject(ObjectReflection def) {
 		return publishObject(def.getName(), def.getParameters());
 	}
 
-	public ObjectClassHandle publishObject(String objectName, Map<String, String> attrMap) {
+	public ObjectClassHandle publishObject(String objectName, AttributeHandleValueMap attrMap) {
 		String[] attrs = (String[]) attrMap.keySet().toArray(new String[0]);
 		return publishObject(objectName, attrs);
 	}
@@ -760,8 +755,7 @@ public class InjectionFederate implements Runnable {
 			try {
 				tick();
 			} catch (CallNotAllowedFromWithinCallback | RTIinternalError e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				log.error(e);
 			}
 		}
 		log.info("advanced logical time to " + fedAmb.getLogicalTime());

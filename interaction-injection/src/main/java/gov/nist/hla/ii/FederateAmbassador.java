@@ -8,7 +8,7 @@ import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.portico.impl.hla13.types.DoubleTime;
+import org.portico.impl.hla1516e.types.time.DoubleTime;
 
 import hla.rti.ObjectNotKnown;
 import hla.rti1516e.AttributeHandleValueMap;
@@ -19,15 +19,26 @@ import hla.rti1516e.ObjectClassHandle;
 import hla.rti1516e.ObjectInstanceHandle;
 import hla.rti1516e.OrderType;
 import hla.rti1516e.ParameterHandleValueMap;
+import hla.rti1516e.RTIambassador;
 import hla.rti1516e.TransportationTypeHandle;
 import hla.rti1516e.exceptions.FederateInternalError;
+import hla.rti1516e.exceptions.FederateNotExecutionMember;
+import hla.rti1516e.exceptions.InvalidInteractionClassHandle;
+import hla.rti1516e.exceptions.NotConnected;
+import hla.rti1516e.exceptions.RTIinternalError;
 
-// assume single threaded environment
+// We assume single threaded environment
 public class FederateAmbassador extends NullFederateAmbassador {
 	private static final Logger log = LogManager.getLogger();
 
+	RTIambassador rtiAmb;
 	private final double federateTime = 0.0;
 	private final double federateLookahead = 1.0;
+
+public FederateAmbassador(RTIambassador rtiAmb) {
+		super();
+		this.rtiAmb = rtiAmb;
+	}
 
 	private class ObjectDetails {
 		private ObjectInstanceHandle objectHandle;
@@ -52,7 +63,7 @@ public class FederateAmbassador extends NullFederateAmbassador {
 	// synchronization point labels that have been announced but not achieved
 	private Set<String> pendingSynchronizationPoints = new HashSet<String>();
 
-	private Set<String> _achievedSynchronizationPoints = new HashSet<String>();
+//	private Set<String> _achievedSynchronizationPoints = new HashSet<String>();
 
 	// map the handle for a discovered object instance to its associated
 	// ObjectDetails
@@ -81,12 +92,12 @@ public class FederateAmbassador extends NullFederateAmbassador {
 		}
 	}
 
-	// @Override
-	// public void federationSynchronized(String synchronizationPointLabel) {
-	// pendingSynchronizationPoints.remove(synchronizationPointLabel);
-	// _achievedSynchronizationPoints.add(synchronizationPointLabel);
-	// log.info("synchronization point achieved: " + synchronizationPointLabel);
-	// }
+//	 @Override
+//	 public void federationSynchronized(String synchronizationPointLabel) {
+//	 pendingSynchronizationPoints.remove(synchronizationPointLabel);
+//	 _achievedSynchronizationPoints.add(synchronizationPointLabel);
+//	 log.info("synchronization point achieved: " + synchronizationPointLabel);
+//	 }
 
 	@Override
 	public void timeRegulationEnabled(LogicalTime theFederateTime) {
@@ -122,11 +133,18 @@ public class FederateAmbassador extends NullFederateAmbassador {
 	}
 
 	@Override
-	public void receiveInteraction(InteractionClassHandle interactionClass, ParameterHandleValueMap theInteraction,
+	public void receiveInteraction(InteractionClassHandle interactionClassHandle, ParameterHandleValueMap parameters,
 			byte[] userSuppliedTag, OrderType sentOrdering, TransportationTypeHandle theTransport, LogicalTime theTime,
 			OrderType receivedOrdering, SupplementalReceiveInfo receiveInfo) throws FederateInternalError {
-		log.info("received interaction: handle=" + interactionClass);
-		receivedInteractions.add(new Interaction(interactionClass, theInteraction));
+		String interactionName = null;
+		try {
+			interactionName = rtiAmb.getInteractionClassName(interactionClassHandle);
+		} catch (InvalidInteractionClassHandle | FederateNotExecutionMember | NotConnected | RTIinternalError e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		log.info("received interaction: handle=" + interactionClassHandle);
+		receivedInteractions.add(new Interaction(interactionClassHandle, interactionName, parameters));
 	}
 
 	@Override
